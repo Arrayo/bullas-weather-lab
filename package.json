@@ -1,0 +1,49 @@
+{
+  "name": "bullas-weather-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "station:find": "tsx src/scripts/station-find.ts",
+    "forecast:collect": "tsx src/scripts/forecast-collect.ts",
+    "forecast:report": "tsx src/scripts/forecast-report.ts",
+    "forecast:verify": "tsx src/scripts/forecast-verify.ts",
+    "forecast:metrics": "tsx src/scripts/forecast-metrics.ts",
+    "observation:collect": "tsx src/scripts/observation-collect.ts",
+    "observation:report": "tsx src/scripts/observation-report.ts",
+    "data:collect": "tsx src/scripts/data-collect.ts",
+    "data:health": "tsx src/scripts/data-health.ts",
+    "data:stats": "tsx src/scripts/data-stats.ts",
+    "data:preflight": "tsx src/scripts/data-preflight.ts",
+    "cron:print": "tsx src/scripts/cron-print.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/scripts/db-migrate.ts",
+    "db:import-local-to-remote": "tsx src/scripts/db-import-local-to-remote.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.4",
+    "pino": "^9.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.7",
+    "drizzle-kit": "^0.30.2",
+    "eslint": "^9.18.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

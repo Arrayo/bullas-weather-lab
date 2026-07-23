@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1784718015128,
+      "tag": "0000_romantic_leech",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784720380487,
+      "tag": "0001_known_pet_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784721046880,
+      "tag": "0002_open_the_enforcers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784723000000,
+      "tag": "0003_data_collection_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784725000000,
+      "tag": "0004_required_optional_models",
+      "breakpoints": true
+    }
+  ]
+}

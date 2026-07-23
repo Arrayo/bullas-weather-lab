@@ -1,0 +1,56 @@
+name: Weather Collect
+
+on:
+  workflow_dispatch:
+  # Re-enable after remote validation:
+  # schedule:
+  #   - cron: "17 */3 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weather-collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      AEMET_API_KEY: ${{ secrets.AEMET_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - name: Collect weather data
+        run: |
+          set +e
+          pnpm data:collect --station=7127X
+          code=$?
+          if [ "$code" -eq 0 ] || [ "$code" -eq 2 ] || [ "$code" -eq 3 ]; then
+            exit 0
+          fi
+          exit "$code"
+      - name: Health check
+        run: |
+          set +e
+          pnpm data:health --station=7127X --json > weather-health.json
+          code=$?
+          if [ "$code" -eq 0 ] || [ "$code" -eq 2 ]; then
+            exit 0
+          fi
+          exit "$code"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weather-health
+          path: weather-health.json
+          if-no-files-found: ignore
+          retention-days: 7

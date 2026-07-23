@@ -1,0 +1,32 @@
+name: Weather Metrics
+
+on:
+  schedule:
+    - cron: "47 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      AEMET_API_KEY: ${{ secrets.AEMET_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm forecast:metrics --station=7127X --json > weather-metrics.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weather-metrics
+          path: weather-metrics.json
+          retention-days: 14
