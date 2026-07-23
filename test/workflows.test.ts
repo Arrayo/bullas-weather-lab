@@ -29,10 +29,10 @@ describe("github workflows", () => {
     expect(collect).toContain('"$code" -eq 3');
   });
 
-  it("mantiene weather-collect sin schedule durante la validación remota", () => {
+  it("mantiene weather-collect con schedule activo cada 3 horas", () => {
     const collect = readWorkflow("weather-collect.yml");
     expect(collect).toContain("workflow_dispatch:");
-    expect(collect).not.toMatch(/^\s+schedule:/m);
+    expect(collect).toMatch(/^\s+schedule:/m);
     expect(collect).toContain('cron: "17 */3 * * *"');
   });
 
