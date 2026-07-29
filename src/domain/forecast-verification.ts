@@ -24,6 +24,10 @@ export interface ForecastVerificationOptions {
   minimumLeadMinutes: number;
   minLeadHours?: number;
   maxLeadHours?: number;
+  /** Caps Turso row reads: only forecasts with valid_at within this window. Default 336h (14d). */
+  lookbackHours?: number;
+  /** Extra full-table discard counts; off by default (expensive on Turso). */
+  includeDiscardStats?: boolean;
 }
 
 export interface ForecastVerificationResult {

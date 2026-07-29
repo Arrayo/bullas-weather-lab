@@ -29,11 +29,11 @@ describe("github workflows", () => {
     expect(collect).toContain('"$code" -eq 3');
   });
 
-  it("mantiene weather-collect con schedule activo cada 3 horas", () => {
+  it("mantiene weather-collect con schedule activo cada 6 horas", () => {
     const collect = readWorkflow("weather-collect.yml");
     expect(collect).toContain("workflow_dispatch:");
     expect(collect).toMatch(/^\s+schedule:/m);
-    expect(collect).toContain('cron: "17 */3 * * *"');
+    expect(collect).toContain('cron: "17 */6 * * *"');
   });
 
   it("no sube archivos de base de datos como artefactos", () => {

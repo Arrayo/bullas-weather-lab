@@ -9,6 +9,8 @@ import type { ForecastRepository, HourlyObservationRepository, ObservationSaveRe
 import type { DatabaseExecutor, LocalDatabase } from "./database-types.js";
 import { dataCollectionRuns, forecastCollections, hourlyObservations, weatherStations } from "./schema.js";
 
+const DEFAULT_VERIFICATION_LOOKBACK_HOURS = 24 * 14;
+
 export class DrizzleWeatherStationRepository implements WeatherStationRepository {
   constructor(private readonly db: DatabaseExecutor) {}
 
@@ -133,10 +135,12 @@ export class DrizzleForecastRepository implements ForecastRepository {
 
   async verifyAgainstObservations(stationId: string, options: ForecastVerificationOptions): Promise<ForecastVerificationResult> {
     const minLeadMinutes = options.minimumLeadMinutes;
-    const minLeadDays = minLeadMinutes / 1440;
+    const minLeadSeconds = minLeadMinutes * 60;
     const minLeadFilterMinutes = options.minLeadHours === undefined ? null : options.minLeadHours * 60;
     const maxLeadFilterMinutes = options.maxLeadHours === undefined ? null : options.maxLeadHours * 60;
     const hoursLimit = options.hours ?? null;
+    const lookbackHours = options.lookbackHours ?? DEFAULT_VERIFICATION_LOOKBACK_HOURS;
+    const lookbackIso = new Date(Date.now() - lookbackHours * 3_600_000).toISOString();
 
     const rows = await queryAll<VerificationSqlRow>(this.db.raw, sql`
       WITH eligible_forecasts AS (
@@ -150,7 +154,7 @@ export class DrizzleForecastRepository implements ForecastRepository {
             hf.relative_humidity_2m AS forecast_humidity,
             hf.wind_speed_10m AS forecast_wind_speed,
             hf.precipitation AS forecast_precipitation,
-            ROUND((julianday(hf.valid_at) - julianday(hf.downloaded_at)) * 1440.0) AS lead_time_minutes,
+            ROUND((unixepoch(hf.valid_at) - unixepoch(hf.downloaded_at)) / 60.0) AS lead_time_minutes,
             ROW_NUMBER() OVER (
               PARTITION BY hf.station_id, hf.model, hf.valid_at
               ORDER BY hf.downloaded_at DESC, hf.collection_id DESC
@@ -158,10 +162,11 @@ export class DrizzleForecastRepository implements ForecastRepository {
           FROM hourly_forecasts hf
           INNER JOIN forecast_collections fc ON fc.id = hf.collection_id
           WHERE hf.station_id = ${stationId}
+            AND hf.valid_at >= ${lookbackIso}
             AND fc.finished_at IS NOT NULL AND fc.status IN ('success', 'partial_success')
-            AND julianday(hf.downloaded_at) <= julianday(hf.valid_at) - ${minLeadDays}
-            AND (${minLeadFilterMinutes} IS NULL OR ((julianday(hf.valid_at) - julianday(hf.downloaded_at)) * 1440.0) >= ${minLeadFilterMinutes})
-            AND (${maxLeadFilterMinutes} IS NULL OR ((julianday(hf.valid_at) - julianday(hf.downloaded_at)) * 1440.0) < ${maxLeadFilterMinutes})
+            AND (unixepoch(hf.valid_at) - unixepoch(hf.downloaded_at)) >= ${minLeadSeconds}
+            AND (${minLeadFilterMinutes} IS NULL OR ((unixepoch(hf.valid_at) - unixepoch(hf.downloaded_at)) / 60.0) >= ${minLeadFilterMinutes})
+            AND (${maxLeadFilterMinutes} IS NULL OR ((unixepoch(hf.valid_at) - unixepoch(hf.downloaded_at)) / 60.0) < ${maxLeadFilterMinutes})
         )
         WHERE forecast_rank = 1
       ), matched AS (
@@ -191,35 +196,49 @@ export class DrizzleForecastRepository implements ForecastRepository {
       ORDER BY matched.valid_at DESC, matched.model ASC
     `);
 
-    const discardedAfterValidTimeCount = await this.countDiscardedAfterValidTimeForecasts(stationId);
-    const discardedBelowMinimumLeadCount = await this.countDiscardedBelowMinimumLeadForecasts(stationId, options.minimumLeadMinutes);
+    if (!options.includeDiscardStats) {
+      return { rows: rows.map(toVerificationRow), discardedAfterValidTimeCount: 0, discardedBelowMinimumLeadCount: 0 };
+    }
+
+    const discardedAfterValidTimeCount = await this.countDiscardedAfterValidTimeForecasts(stationId, lookbackIso);
+    const discardedBelowMinimumLeadCount = await this.countDiscardedBelowMinimumLeadForecasts(
+      stationId,
+      options.minimumLeadMinutes,
+      lookbackIso,
+    );
 
     return { rows: rows.map(toVerificationRow), discardedAfterValidTimeCount, discardedBelowMinimumLeadCount };
   }
 
-  private async countDiscardedAfterValidTimeForecasts(stationId: string): Promise<number> {
+  private async countDiscardedAfterValidTimeForecasts(stationId: string, lookbackIso: string): Promise<number> {
     const [row] = await queryAll<{ count: number }>(this.db.raw, sql`
       SELECT COUNT(*) AS count
       FROM hourly_forecasts hf
       INNER JOIN hourly_observations obs
         ON obs.station_id = hf.station_id AND obs.observed_at = hf.valid_at AND obs.source = 'aemet'
       WHERE hf.station_id = ${stationId}
-        AND julianday(hf.downloaded_at) > julianday(hf.valid_at)
+        AND hf.valid_at >= ${lookbackIso}
+        AND hf.downloaded_at > hf.valid_at
     `);
 
     return row?.count ?? 0;
   }
 
-  private async countDiscardedBelowMinimumLeadForecasts(stationId: string, minimumLeadMinutes: number): Promise<number> {
-    const minLeadDays = minimumLeadMinutes / 1440;
+  private async countDiscardedBelowMinimumLeadForecasts(
+    stationId: string,
+    minimumLeadMinutes: number,
+    lookbackIso: string,
+  ): Promise<number> {
+    const minLeadSeconds = minimumLeadMinutes * 60;
     const [row] = await queryAll<{ count: number }>(this.db.raw, sql`
       SELECT COUNT(*) AS count
       FROM hourly_forecasts hf
       INNER JOIN hourly_observations obs
         ON obs.station_id = hf.station_id AND obs.observed_at = hf.valid_at AND obs.source = 'aemet'
       WHERE hf.station_id = ${stationId}
-        AND julianday(hf.downloaded_at) <= julianday(hf.valid_at)
-        AND julianday(hf.downloaded_at) > julianday(hf.valid_at) - ${minLeadDays}
+        AND hf.valid_at >= ${lookbackIso}
+        AND hf.downloaded_at <= hf.valid_at
+        AND (unixepoch(hf.valid_at) - unixepoch(hf.downloaded_at)) < ${minLeadSeconds}
     `);
 
     return row?.count ?? 0;
@@ -329,32 +348,15 @@ export class DrizzleHourlyObservationRepository implements HourlyObservationRepo
       validateObservation(observation);
     }
 
-    let inserted = 0;
-    let updated = 0;
-
-    const saveOne = async (runner: LocalDatabase, observation: HourlyObservation) => {
-      const [existing] = await runner.select({ id: hourlyObservations.id }).from(hourlyObservations).where(sql`${hourlyObservations.stationId} = ${observation.stationId} AND ${hourlyObservations.observedAt} = ${observation.observedAt.toISOString()} AND ${hourlyObservations.source} = ${observation.source}`).limit(1);
-      await runner.insert(hourlyObservations).values(toObservationInsert(observation)).onConflictDoUpdate({
-        target: [hourlyObservations.stationId, hourlyObservations.observedAt, hourlyObservations.source],
-        set: {
-          downloadedAt: observation.downloadedAt.toISOString(),
-          temperature: observation.temperature,
-          relativeHumidity: observation.relativeHumidity,
-          precipitation: observation.precipitation,
-          windSpeed: observation.windSpeed,
-          windDirection: observation.windDirection,
-          windGust: observation.windGust,
-          pressure: observation.pressure,
-        },
-      });
-      if (existing) updated += 1;
-      else inserted += 1;
-    };
+    const [beforeRow] = await queryAll<{ count: number }>(
+      this.db.raw,
+      sql`SELECT COUNT(*) AS count FROM hourly_observations WHERE station_id = ${observations[0]!.stationId}`,
+    );
+    const before = beforeRow?.count ?? 0;
 
     if (this.db.kind === "sqlite") {
       this.db.raw.transaction((tx) => {
         for (const observation of observations) {
-          const [existing] = tx.select({ id: hourlyObservations.id }).from(hourlyObservations).where(sql`${hourlyObservations.stationId} = ${observation.stationId} AND ${hourlyObservations.observedAt} = ${observation.observedAt.toISOString()} AND ${hourlyObservations.source} = ${observation.source}`).limit(1).all();
           tx.insert(hourlyObservations).values(toObservationInsert(observation)).onConflictDoUpdate({
             target: [hourlyObservations.stationId, hourlyObservations.observedAt, hourlyObservations.source],
             set: {
@@ -368,17 +370,35 @@ export class DrizzleHourlyObservationRepository implements HourlyObservationRepo
               pressure: observation.pressure,
             },
           }).run();
-          if (existing) updated += 1;
-          else inserted += 1;
         }
       });
     } else {
       await this.db.raw.transaction(async (tx) => {
         for (const observation of observations) {
-          await saveOne(tx, observation);
+          await tx.insert(hourlyObservations).values(toObservationInsert(observation)).onConflictDoUpdate({
+            target: [hourlyObservations.stationId, hourlyObservations.observedAt, hourlyObservations.source],
+            set: {
+              downloadedAt: observation.downloadedAt.toISOString(),
+              temperature: observation.temperature,
+              relativeHumidity: observation.relativeHumidity,
+              precipitation: observation.precipitation,
+              windSpeed: observation.windSpeed,
+              windDirection: observation.windDirection,
+              windGust: observation.windGust,
+              pressure: observation.pressure,
+            },
+          });
         }
       });
     }
+
+    const [afterRow] = await queryAll<{ count: number }>(
+      this.db.raw,
+      sql`SELECT COUNT(*) AS count FROM hourly_observations WHERE station_id = ${observations[0]!.stationId}`,
+    );
+    const after = afterRow?.count ?? before;
+    const inserted = Math.max(0, after - before);
+    const updated = Math.max(0, observations.length - inserted);
 
     return { received: observations.length, inserted, updated };
   }

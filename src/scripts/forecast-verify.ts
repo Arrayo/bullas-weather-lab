@@ -24,6 +24,8 @@ if (!station) {
 
 const verificationOptions = {
   hours,
+  lookbackHours: Math.max(hours * 2, 24 * 14),
+  includeDiscardStats: true,
   minimumLeadMinutes,
   ...(minLeadHours === undefined ? {} : { minLeadHours }),
   ...(maxLeadHours === undefined ? {} : { maxLeadHours }),

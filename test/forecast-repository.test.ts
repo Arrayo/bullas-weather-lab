@@ -64,7 +64,7 @@ describe("DrizzleForecastRepository", () => {
       makeObservation("2026-07-22T10:00:00.000Z", { temperature: 30, relativeHumidity: 45, windSpeed: 10 }),
     ]);
 
-    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 0 });
+    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, lookbackHours: 24 * 365, minimumLeadMinutes: 0 });
     const rows = result.rows;
 
     expect(rows).toHaveLength(1);
@@ -81,7 +81,12 @@ describe("DrizzleForecastRepository", () => {
     ], "gfs_global");
     await observations.saveMany([makeObservation("2026-07-22T10:00:00.000Z", { temperature: 30 })]);
 
-    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 0 });
+    const result = await forecasts.verifyAgainstObservations("STATION", {
+      hours: 24,
+      lookbackHours: 24 * 365,
+      includeDiscardStats: true,
+      minimumLeadMinutes: 0,
+    });
 
     expect(result.rows).toEqual([]);
     expect(result.discardedAfterValidTimeCount).toBe(1);
@@ -95,7 +100,7 @@ describe("DrizzleForecastRepository", () => {
     ], "gfs_global");
     await observations.saveMany([makeObservation("2026-07-22T10:00:00.000Z", { temperature: 30 })]);
 
-    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 30 });
+    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, lookbackHours: 24 * 365, minimumLeadMinutes: 30 });
 
     expect(result.rows).toEqual([]);
   });
@@ -110,7 +115,7 @@ describe("DrizzleForecastRepository", () => {
     await forecasts.finishCollection(newer, "success", ["gfs_global"], [], new Date("2026-07-22T09:21:00.000Z"));
     await observations.saveMany([makeObservation("2026-07-22T10:00:00.000Z", { temperature: 24 })]);
 
-    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 30 });
+    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, lookbackHours: 24 * 365, minimumLeadMinutes: 30 });
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.forecastCollectionId).toBe(newer);
@@ -128,7 +133,7 @@ describe("DrizzleForecastRepository", () => {
     await forecasts.finishCollection(invalidLatest, "success", ["gfs_global"], [], new Date("2026-07-22T11:01:00.000Z"));
     await observations.saveMany([makeObservation("2026-07-22T10:00:00.000Z", { temperature: 19 })]);
 
-    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 0 });
+    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, lookbackHours: 24 * 365, minimumLeadMinutes: 0 });
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.forecastCollectionId).toBe(valid);
@@ -148,7 +153,7 @@ describe("DrizzleForecastRepository", () => {
       makeObservation("2026-07-22T12:00:00.000Z", { temperature: 29 }),
     ]);
 
-    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 0, minLeadHours: 5, maxLeadHours: 7 });
+    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, lookbackHours: 24 * 365, minimumLeadMinutes: 0, minLeadHours: 5, maxLeadHours: 7 });
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0]?.leadTimeHours).toBe(6);
@@ -164,7 +169,7 @@ describe("DrizzleForecastRepository", () => {
     await forecasts.finishCollection(collectionId, "success", ["gfs_global", "icon_global"], [], new Date("2026-07-22T00:01:00.000Z"));
     await observations.saveMany([makeObservation("2026-07-22T10:00:00.000Z", { temperature: 19 })]);
 
-    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 0 });
+    const result = await forecasts.verifyAgainstObservations("STATION", { hours: 24, lookbackHours: 24 * 365, minimumLeadMinutes: 0 });
 
     expect(result.rows.map((row) => row.model)).toEqual(["gfs_global"]);
   });
@@ -176,7 +181,7 @@ describe("DrizzleForecastRepository", () => {
     await forecasts.finishCollection(collectionId, "success", ["gfs_global"], [], new Date("2026-07-22T01:01:00.000Z"));
     await observations.saveMany([makeObservation("2026-07-22T11:00:00.000Z", { temperature: 30 })]);
 
-    await expect(forecasts.verifyAgainstObservations("STATION", { hours: 24, minimumLeadMinutes: 0 })).resolves.toMatchObject({ rows: [] });
+    await expect(forecasts.verifyAgainstObservations("STATION", { hours: 24, lookbackHours: 24 * 365, minimumLeadMinutes: 0 })).resolves.toMatchObject({ rows: [] });
   });
 
   it("revierte model_runs y hourly_forecasts si falla una hora a mitad del lote", async () => {

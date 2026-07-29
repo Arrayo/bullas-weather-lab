@@ -179,7 +179,7 @@ Para reactivar la recogida programada, edita `.github/workflows/weather-collect.
 
 ```yaml
 schedule:
-  - cron: "17 */3 * * *"
+  - cron: "17 */6 * * *"
 ```
 
 ## Decisiones
@@ -290,13 +290,13 @@ Exit codes para `data:collect` y `data:health`:
 
 `data:collect` usa un bloqueo persistente en SQLite: solo permite una ejecución `running` por estación. Si una ejecución queda bloqueada más de `COLLECTION_LOCK_TIMEOUT_MINUTES`, la siguiente ronda la marca como `failure` y continúa.
 
-Ejemplo cron recomendado cada 3 horas:
+Ejemplo cron recomendado cada 6 horas:
 
 ```cron
-7 */3 * * * cd /ruta/bullas-weather-lab && /ruta/pnpm data:collect --station=7127X >> logs/data-collect.log 2>&1
+17 */6 * * * cd /ruta/bullas-weather-lab && /ruta/pnpm data:collect --station=7127X >> logs/data-collect.log 2>&1
 ```
 
-Ejecutar cada 3 horas genera snapshots suficientes para analizar horizontes, reduce llamadas innecesarias, vuelve a descargar las últimas observaciones AEMET y mantiene idempotencia.
+Ejecutar cada 6 horas genera snapshots suficientes para analizar horizontes, reduce lecturas en Turso Free, vuelve a descargar las últimas observaciones AEMET y mantiene idempotencia.
 
 Alternativa si se quieren observaciones más frecuentes conservando comandos individuales:
 

@@ -17,7 +17,11 @@ if (!station) {
   process.exit(1);
 }
 
-const verification = await app.forecastRepository.verifyAgainstObservations(station.id, { minimumLeadMinutes });
+const verification = await app.forecastRepository.verifyAgainstObservations(station.id, {
+  hours: 168,
+  lookbackHours: 24 * 14,
+  minimumLeadMinutes,
+});
 const summaries = summarizeModelPerformance(station.id, verification.rows);
 const publishable = summaries.filter((summary) => summary.meanAbsoluteError !== null);
 
